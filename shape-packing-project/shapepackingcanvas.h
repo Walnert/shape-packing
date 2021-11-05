@@ -5,17 +5,19 @@
 #include <QTimer>
 
 class QGraphicsSimpleTextItem;
+class QGraphicsPathItem;
 class ShapePackingCanvas : public QGraphicsView
 {
     Q_OBJECT
 public:
     ShapePackingCanvas();
-    int mouse_x;
-    int mouse_y;
     QPointF mousePos;
     QPointF mouseClickedPos;
     QGraphicsScene scene;
     QTimer timer;
+
+    float pathAnimSpeed;
+    int mode;
 
     QList<QGraphicsPathItem*> paths;
     QList<QGraphicsPathItem*> movingPaths;
@@ -29,6 +31,9 @@ protected:
     void mouseMoveEvent(QMouseEvent *evt) override;
     void mousePressEvent(QMouseEvent *evt) override;
     void mouseReleaseEvent(QMouseEvent *evt) override;
+
+private:
+    QPointF normalized(const QPointF point);
 
 public slots:
     void timerUpdate();
