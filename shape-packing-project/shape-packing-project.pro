@@ -11,11 +11,14 @@ CONFIG += c++11
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
-    shapepackingcanvas.cpp
+    shapepackingcanvas.cpp \
+    shapepackingpathitem.cpp
 
 HEADERS += \
+    BinPack2D.hpp \
     mainwindow.h \
-    shapepackingcanvas.h
+    shapepackingcanvas.h \
+    shapepackingpathitem.h
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

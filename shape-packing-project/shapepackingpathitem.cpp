@@ -1,9 +1,11 @@
 #include "shapepackingpathitem.h"
 
-QGraphicsPathItem::QGraphicsPathItem() {
+ShapePackingPathItem::ShapePackingPathItem()
+{
     age = 0;
+    packedPos = QPointF(69,69);
 }
 
-//void ShapePackingPathItem::timerUpdate() {
-//    ++age;
-//}
+ShapePackingPathItem::~ShapePackingPathItem() {
+
+}

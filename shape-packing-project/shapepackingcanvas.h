@@ -5,7 +5,7 @@
 #include <QTimer>
 
 class QGraphicsSimpleTextItem;
-class QGraphicsPathItem;
+class ShapePackingPathItem;
 class ShapePackingCanvas : public QGraphicsView
 {
     Q_OBJECT
@@ -19,11 +19,13 @@ public:
     float pathAnimSpeed;
     int mode;
 
-    QList<QGraphicsPathItem*> paths;
-    QList<QGraphicsPathItem*> movingPaths;
+    QList<ShapePackingPathItem*> paths;
+    QList<ShapePackingPathItem*> movingPaths;
+//    QList<QPointF> packedPositions;
+    ShapePackingPathItem *curPath;
 
-    QGraphicsPathItem *curPath;
-    QGraphicsSimpleTextItem *coordsText;
+    QList<QGraphicsSimpleTextItem*> coordsTexts;
+    QGraphicsSimpleTextItem *curCoordsText;
 
 
 
@@ -31,6 +33,8 @@ protected:
     void mouseMoveEvent(QMouseEvent *evt) override;
     void mousePressEvent(QMouseEvent *evt) override;
     void mouseReleaseEvent(QMouseEvent *evt) override;
+
+    void pack2D(QList<ShapePackingPathItem*> paths);
 
 private:
     QPointF normalized(const QPointF point);

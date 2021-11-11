@@ -3,13 +3,14 @@
 
 #include <QGraphicsPathItem>
 
-class QGraphicsPathItem : public QGraphicsPathItem
+class ShapePackingPathItem : public QGraphicsPathItem
 {
 public:
-    QGraphicsPathItem();
-    int age;
-public slots:
-    //void timerUpdate();
+    QPointF packedPos;
+    int age = 0;
+
+    ShapePackingPathItem();
+    virtual ~ShapePackingPathItem();
 };
 
 #endif // SHAPEPACKINGPATHITEM_H
