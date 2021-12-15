@@ -13,18 +13,22 @@
 ShapePackingCanvas::ShapePackingCanvas() {
     setBackgroundBrush(QBrush(QColor(25,25,25), Qt::SolidPattern));
     curPath = nullptr;
+    corners.insert(0, QPointF(0,0));
 
     setScene(&scene);
     setRenderHint(QPainter::Antialiasing);
     setSceneRect(-400,-300,800,600);
 
-    timer.setInterval(1000/60);
+    pathAnimSpeed = .04;
+    framerate = 60;
+    mode = 1;
+
+    //int t = 0;
+
+    timer.setInterval(1000/framerate);
     connect(&timer, &QTimer::timeout, this, &ShapePackingCanvas::timerUpdate);
     timer.start();
-
-    pathAnimSpeed = .03;
-    mode = 1;
-    curCoordsText = scene.addSimpleText("0\n0");
+    //curCoordsText = scene.addSimpleText("");
 
 }
 
@@ -39,7 +43,10 @@ void ShapePackingCanvas::mousePressEvent(QMouseEvent *evt) {
 
     QPainterPath path;
     path.addRect(QRectF(pos,QSizeF(0,0)));
-    curPath = (ShapePackingPathItem *) scene.addPath(path,QPen(Qt::yellow, 3.0));
+    curPath = new ShapePackingPathItem();
+    curPath->setPath(path);
+    curPath->setPen(QPen(Qt::yellow, 3.0));
+    scene.addItem(curPath);
     paths.push_back(curPath);
 
     curCoordsText = scene.addSimpleText("0\n0");
@@ -65,15 +72,16 @@ void ShapePackingCanvas::mouseMoveEvent(QMouseEvent *evt) {
 
 
 void ShapePackingCanvas::mouseReleaseEvent(QMouseEvent *evt) {
-    //QPointF pos = mapToScene(evt->pos());
+    curPath->startTLC = mapFromScene(curPath->pos() + curPath->rect().topLeft());
+    curPath->startPos = curPath->pos();
+
+    qDebug() << "start TLC = " << curPath->startTLC;
 
     curPath->setBrush(QColor(0,0,255,26));
     curPath->setPen(QPen(Qt::lightGray, 3.0));
 
-    qDebug() << "mouse released BEFORE sort";
-    //pack2D(paths);
-    qDebug() << "mouse released AFTER sort";
-
+    onlinePack2(packedPaths, curPath);
+    packedPaths.push_back(curPath);
 
     movingPaths.push_back(curPath);
     //curPath->setPos(sceneBottomLeftCorner - rectBottomLeftCorner);
@@ -83,6 +91,8 @@ void ShapePackingCanvas::mouseReleaseEvent(QMouseEvent *evt) {
 }
 
 void ShapePackingCanvas::timerUpdate() {
+    addNewRect(1+t, 1+t);
+    ++t;
     for (QGraphicsSimpleTextItem* coordsText : coordsTexts) {
         coordsText->setOpacity(coordsText->opacity()-.02);
         coordsText->moveBy(0,-.2);
@@ -93,36 +103,52 @@ void ShapePackingCanvas::timerUpdate() {
     }
 
     if (mode==1) {
-        QPointF sceneBottomLeftCorner = QPointF(0,this->height());
-        //int frames = 60;
-        for (ShapePackingPathItem* path : movingPaths) {
-            QPointF rectBottomLeftCorner = mapFromScene(path->pos() + path->shape().boundingRect().bottomLeft());
-    //        QVector2D rBLC = QVector2D(rectBottomLeftCorner);
-    //        QVector2D sBLC = QVector2D(sceneBottomLeftCorner);
-    //        QVector2D deltaV = sBLC - rBLC;
-            QPointF delta = sceneBottomLeftCorner - rectBottomLeftCorner;//path->packedPos + QPointF(400,400) - rectBottomLeftCorner;
-            path->setPos(path->pos() + 1*normalized(delta) + delta*pathAnimSpeed);
 
-            if (delta.isNull()) {
+        for (ShapePackingPathItem* path : movingPaths) {
+            ++path->age;
+            //QPointF rectTopLeftCorner = mapFromScene(path->pos() + path->rect().topLeft());
+            QPointF delta = path->packedPos - path->startTLC;
+            path->setPos(path->startPos + delta*path->age/framerate);
+
+            if (path->age >= 60) {
+                //path->setPos(path->packedPos + path->startPos);
                 path->setBrush(QColor(255,0,0,26));
                 movingPaths.removeOne(path);
             }
         }
     } else if (mode==2) {
-        for (ShapePackingPathItem* path : movingPaths) {
-            QPointF rectPos = mapFromScene(path->pos() + path->shape().boundingRect().center());
-            for (ShapePackingPathItem* otherPath : movingPaths) {
-                if (true) {
-                    QPointF otherPos = mapFromScene(otherPath->pos() + otherPath->shape().boundingRect().center());
-                    QPointF delta = otherPos-rectPos;
-                    if (true) {
-                        path->setPos(path->pos() + .01*delta);// / (pow(hypotf(delta.x(),delta.y()),3)));
+    return;
+    }
+}
 
-                    }
-                }
+void ShapePackingCanvas::onlinePack2(QList<ShapePackingPathItem *> packedPaths, ShapePackingPathItem* curPath) {
+    //qDebug() << "Corners BEFORE: " << corners;
+
+    for (auto icorner = corners.begin() ; icorner != corners.end() ; ++icorner) {
+        QPointF &corner = *icorner;
+        //qDebug() << "trying " << corner;
+        curPath->packedPos = corner;
+        bool ok = true;
+        for (ShapePackingPathItem* path : packedPaths) {
+            //qDebug() << "trying path " << path->startTLC;
+            if (curPath->intersects(path)) {
+                //qDebug() << "failed " << path->startTLC;
+                ok = false;
+                break;
             }
         }
+        if (ok) {
+            //qDebug() << "success at corner " << corner << "\n";
+            corners.erase(icorner);
+            QPointF corner1 = curPath->packedPos + QPointF(curPath->rect().width(),0);
+            QPointF corner2 = curPath->packedPos + QPointF(0,curPath->rect().height());
+            corners.insert(corner1.manhattanLength(), corner1);
+            corners.insert(corner2.manhattanLength(), corner2);
+            //qDebug() << "Corners AFTER: " << corners;
+            break;
+        }
     }
+    return;
 }
 
 QPointF ShapePackingCanvas::normalized(const QPointF point) {
@@ -131,6 +157,46 @@ QPointF ShapePackingCanvas::normalized(const QPointF point) {
         return point/mag;
     }
     else return QPointF(0,0);
+}
+
+void ShapePackingCanvas::addNewRect(int w, int h) {
+    //QPainterPath path;
+    //path.addRect(QRectF(pos,QSizeF(0,0)));
+    curPath = new ShapePackingPathItem();
+    //curPath->setPath(path);
+    curPath->setPen(QPen(Qt::yellow, 3.0));
+    scene.addItem(curPath);
+    paths.push_back(curPath);
+    QPainterPath newPath;
+    newPath.addRect(QRectF(0,0,w,h));
+
+    curPath->setPath(newPath);
+    curPath->startTLC = mapFromScene(curPath->pos() + curPath->rect().topLeft());
+    curPath->startPos = curPath->pos();
+
+    //qDebug() << "start TLC = " << curPath->startTLC;
+
+    curPath->setBrush(QColor(0,0,255,26));
+    curPath->setPen(QPen(Qt::lightGray, 3.0));
+
+    onlinePack2(packedPaths, curPath);
+    packedPaths.push_back(curPath);
+
+    movingPaths.push_back(curPath);
+
+}
+
+void ShapePackingCanvas::clear() {
+    for (ShapePackingPathItem* path : paths) {
+        scene.removeItem(path);
+    }
+    paths.clear();
+    packedPaths.clear();
+    movingPaths.clear();
+    corners.clear();
+    t=0;
+    corners.insert(0, QPointF(0,0));
+    return;
 }
 
 void ShapePackingCanvas::pack2D(QList<ShapePackingPathItem *> paths) {
@@ -150,7 +216,6 @@ void ShapePackingCanvas::pack2D(QList<ShapePackingPathItem *> paths) {
 
        //printf("hello");
 
-       // random size for this content
        int width  = path->shape().boundingRect().size().width();//getSizePointF(path).x();
        int height = path->shape().boundingRect().size().height();//getSizePointF(path).y();
 
@@ -164,11 +229,12 @@ void ShapePackingCanvas::pack2D(QList<ShapePackingPathItem *> paths) {
      }
 
      // Sort the input content by size... usually packs better.
-     //inputContent.Sort();
+     inputContent.Sort();
 
      // Create some bins! ( 2 bins, 128x128 in this example )
      BinPack2D::CanvasArray<MyContent> canvasArray =
        BinPack2D::UniformCanvasArrayBuilder<MyContent>(this->width(),this->height(),1).Build();
+       qDebug() << this->width() << this->height();
 
      // A place to store content that didnt fit into the canvas array.
      BinPack2D::ContentAccumulator<MyContent> remainder;
@@ -194,14 +260,14 @@ void ShapePackingCanvas::pack2D(QList<ShapePackingPathItem *> paths) {
        // retreive your data.
        MyContent &myContent = content.content;
 
-       printf("\t%9s of size %3dx%3d at position %3d,%3d,%2d rotated=%s\n",
-          myContent.str.c_str(),
-          content.size.w,
-          content.size.h,
-          content.coord.x,
-          content.coord.y,
-          content.coord.z,
-          (content.rotated ? "yes":" no"));
+//       printf("\t%9s of size %3dx%3d at position %3d,%3d,%2d rotated=%s\n",
+//          myContent.str.c_str(),
+//          content.size.w,
+//          content.size.h,
+//          content.coord.x,
+//          content.coord.y,
+//          content.coord.z,
+//          (content.rotated ? "yes":" no"));
 
        qDebug() << myContent.str.c_str() << " of size " << content.size.w << "x" << content.size.h << " at position " << content.coord.x << ", " << content.coord.y;
        qDebug() << paths;

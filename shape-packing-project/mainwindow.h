@@ -5,18 +5,21 @@
 #include <QGraphicsScene>
 #include <QGraphicsRectItem>
 #include "shapepackingcanvas.h"
-#include <QTimer>
-//#include <QGraphicsView>
 
-//class ShapePackingCanvas;
+class QPushButton;
+class QLineEdit;
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
     ShapePackingCanvas *view;
+    QPushButton *clearButton;
+    QPushButton *addButton;
+    QLineEdit *inputField;
 
 public slots:
-    //void timerUpdate();
-
+    void clearButtonClicked();
+    void addButtonClicked();
 
 public:
     MainWindow(QWidget *parent = nullptr);
