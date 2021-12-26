@@ -60,3 +60,5 @@ TODO: Fix resizing rules so that it only expands and contracts from the bottom-r
 TODO: Enable keyboard input so that hitting "Enter" functions the same as clicking "Add"
 
 TODO: Enable right-clicking a rectangle to erase it.
+
+TODO: Enable file reading and writing (read a .txt file full of rectangle dimensions, write a file of dimensions and locations, print a PNG image of the canvas)
