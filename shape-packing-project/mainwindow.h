@@ -8,6 +8,7 @@
 
 class QPushButton;
 class QLineEdit;
+class QLabel;
 
 class MainWindow : public QMainWindow
 {
@@ -16,6 +17,7 @@ class MainWindow : public QMainWindow
     QPushButton *clearButton;
     QPushButton *addButton;
     QLineEdit *inputField;
+    QLabel *label;
 
 public slots:
     void clearButtonClicked();

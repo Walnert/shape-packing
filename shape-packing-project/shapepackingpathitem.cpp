@@ -1,17 +1,15 @@
 #include "shapepackingpathitem.h"
+#include "shapepackingcanvas.h"
 #include <QDebug>
 
-ShapePackingPathItem::ShapePackingPathItem()
-{
-    age = 0;
-    packedPos = QPointF(69,69);
+ShapePackingPathItem::ShapePackingPathItem(ShapePackingCanvas* canvas) {
+    packedPos = QPointF(400,400); //placeholder position, does not get used unless there's a bug
+    myCanvas = canvas; //sets up a pointer to the canvas in order to access the canvas's dimensions
 }
 
-ShapePackingPathItem::~ShapePackingPathItem() {
+ShapePackingPathItem::~ShapePackingPathItem() {}
 
-}
-
-QRectF ShapePackingPathItem::rect() {
+QRectF ShapePackingPathItem::rect() { //helper function to shorten frequent commands
     return this->shape().boundingRect();
 }
 
@@ -21,22 +19,30 @@ bool ShapePackingPathItem::intersects(ShapePackingPathItem *path) {
     int ay1 = path->packedPos.y();
     int ay2 = ay1 + path->rect().height();
 
-    //qDebug() << ax1 << ay1 << ax2 << ay2;
-
     int bx1 = this->packedPos.x();
     int bx2 = bx1 + this->rect().width();
     int by1 = this->packedPos.y();
     int by2 = by1 + this->rect().height();
 
-    //qDebug() << bx1 << by1 << bx2 << by2;
+    // if it's NOT overlapping, then return false. Otherwise, return true.
 
-    bool intersects_x;
-    bool intersects_y;
+    if (ay2 <= by1 || by2 <= ay1) return false;
+    if (ax2 <= bx1 || bx2 <= ax1) return false;
 
+    return true;
+}
 
-    intersects_y = !(ay2 <= by1 || by2 <= ay1);
-    intersects_x = !(ax2 <= bx2 || bx2 <= ax1);
+bool ShapePackingPathItem::isInsideCanvas() {
+    int x1 = this->packedPos.x();
+    int x2 = x1 + this->rect().width();
+    int y1 = this->packedPos.y();
+    int y2 = y1 + this->rect().height();
 
+    int width = myCanvas->width();
+    int height = myCanvas->height();
 
-    return (intersects_x && intersects_y);
+    //returns true as long as the bottom-right corner of the rectangle is inside the canvas.
+
+    if (x2 < width && y2 <= height) return true;
+    return false;
 }

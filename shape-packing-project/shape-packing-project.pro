@@ -15,7 +15,6 @@ SOURCES += \
     shapepackingpathitem.cpp
 
 HEADERS += \
-    BinPack2D.hpp \
     mainwindow.h \
     shapepackingcanvas.h \
     shapepackingpathitem.h

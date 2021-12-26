@@ -7,64 +7,60 @@
 #include <QPainter>
 #include <QGraphicsSimpleTextItem>
 #include <math.h>
-#include "BinPack2D.hpp"
-//#include <stdio.h>
 
 ShapePackingCanvas::ShapePackingCanvas() {
-    setBackgroundBrush(QBrush(QColor(25,25,25), Qt::SolidPattern));
+    setBackgroundBrush(QBrush(QColor(25,25,25), Qt::SolidPattern)); //dark background
     curPath = nullptr;
-    corners.insert(0, QPointF(0,0));
+    corners.insert(0, QPointF(0,0)); //starts packing at top left corner of canvas
 
     setScene(&scene);
     setRenderHint(QPainter::Antialiasing);
-    setSceneRect(-400,-300,800,600);
+    setSceneRect(-canvasWidth/2, -canvasHeight/2, canvasWidth, canvasHeight); //positions canvas in the middle of the screen based on canvas size
 
-    pathAnimSpeed = .04;
+    animLength = 30;
     framerate = 60;
-    mode = 1;
-
-    //int t = 0;
+    mode = 1; //mode 1 = pack the rectangles, mode 2 = the rectangles just sit there where you drew them.
+    // (mode 2 used for debugging collision scripts)
 
     timer.setInterval(1000/framerate);
     connect(&timer, &QTimer::timeout, this, &ShapePackingCanvas::timerUpdate);
     timer.start();
-    //curCoordsText = scene.addSimpleText("");
-
 }
 
 QPointF getSizePointF(ShapePackingPathItem *path) {
-    return QPointF(path->shape().boundingRect().size().width(),
-                   path->shape().boundingRect().size().height());
+    return QPointF(path->rect().width(),
+                   path->rect().height());
 }
 
 void ShapePackingCanvas::mousePressEvent(QMouseEvent *evt) {
-    QPointF pos = mapToScene(evt->pos());
+    QPointF pos = mapToScene(evt->pos()); //records mouse pos
     mouseClickedPos = pos;
 
+    //creates a new path and sets it as the current path
     QPainterPath path;
     path.addRect(QRectF(pos,QSizeF(0,0)));
-    curPath = new ShapePackingPathItem();
+    curPath = new ShapePackingPathItem(this);
     curPath->setPath(path);
     curPath->setPen(QPen(Qt::yellow, 3.0));
     scene.addItem(curPath);
     paths.push_back(curPath);
 
+    //draws width x height text near cursor
     curCoordsText = scene.addSimpleText("0\n0");
     curCoordsText->setPos(pos + QPointF(20,0));
     curCoordsText->setBrush(Qt::white);
-    //create rectangle, set as current item, push to list, set top left corner position
 }
 
 void ShapePackingCanvas::mouseMoveEvent(QMouseEvent *evt) {
     QPointF pos = mapToScene(evt->pos());
-    //qDebug() << pos; //fix the coordinate systems!
     if (curPath == nullptr) return;
 
+    //draws a dynamic "draft" rectangle that changes size with the cursor's movements
     QPainterPath newPath;
     newPath.addRect(QRectF(mouseClickedPos, pos));
-
     curPath->setPath(newPath);
 
+    //updates coords text
     curCoordsText->setText(QString::number(getSizePointF(curPath).x()) + "\n" +
                         QString::number(getSizePointF(curPath).y()));
     curCoordsText->setPos(pos + QPointF(20,0));
@@ -72,27 +68,31 @@ void ShapePackingCanvas::mouseMoveEvent(QMouseEvent *evt) {
 
 
 void ShapePackingCanvas::mouseReleaseEvent(QMouseEvent *evt) {
+    //records start position information about the final rectangle
     curPath->startTLC = mapFromScene(curPath->pos() + curPath->rect().topLeft());
     curPath->startPos = curPath->pos();
-
-    qDebug() << "start TLC = " << curPath->startTLC;
-
-    curPath->setBrush(QColor(0,0,255,26));
+    curPath->setBrush(QColor(0,0,255,100));
     curPath->setPen(QPen(Qt::lightGray, 3.0));
 
-    onlinePack2(packedPaths, curPath);
-    packedPaths.push_back(curPath);
+    if (mode==1) {
+        // if it's able to pack it successfully, set it to "alive" and add it to the list of packed paths.
+        if (onlinePack2(packedPaths, curPath)) {
+            packedPaths.push_back(curPath);
+            curPath->alive = true;
+        // else, the path is "dead" and will fade away during the animation.
+        } else curPath->alive = false;
 
-    movingPaths.push_back(curPath);
-    //curPath->setPos(sceneBottomLeftCorner - rectBottomLeftCorner);
+    } else if (mode==2) {
+        curPath->packedPos = curPath->startTLC;
+        packedPaths.push_back(curPath);
+    }
 
     coordsTexts.append(curCoordsText);
-    //fill in rectangle, set current to nullpointer
+    movingPaths.push_back(curPath); //adds path, dead or alive, to movingPaths list.
 }
 
 void ShapePackingCanvas::timerUpdate() {
-    addNewRect(1+t, 1+t);
-    ++t;
+    //animates coords text to drift upwards and fade away once the mouse is released.
     for (QGraphicsSimpleTextItem* coordsText : coordsTexts) {
         coordsText->setOpacity(coordsText->opacity()-.02);
         coordsText->moveBy(0,-.2);
@@ -101,19 +101,28 @@ void ShapePackingCanvas::timerUpdate() {
             coordsTexts.removeOne(coordsText);
         }
     }
-
     if (mode==1) {
-
         for (ShapePackingPathItem* path : movingPaths) {
-            ++path->age;
-            //QPointF rectTopLeftCorner = mapFromScene(path->pos() + path->rect().topLeft());
-            QPointF delta = path->packedPos - path->startTLC;
-            path->setPos(path->startPos + delta*path->age/framerate);
-
-            if (path->age >= 60) {
-                //path->setPos(path->packedPos + path->startPos);
-                path->setBrush(QColor(255,0,0,26));
-                movingPaths.removeOne(path);
+            //if the path is alive, moves the path linearly from its starting position to its packed position.
+            //animation is a function of the rectangle's age (in frames).
+            if (path->alive) {
+                ++path->age;
+                QPointF delta = path->packedPos - path->startTLC;
+                path->setPos(path->startPos + delta*path->age/animLength);
+                if (path->age >= animLength) { //when the path moves into its final position
+                    path->setBrush(QColor(255,0,0,100)); //turn red
+                    movingPaths.removeOne(path);
+                }
+            //if the path is dead, it turns gray and drifts off to heaven. (That's how I thought of it)
+            } else {
+                path->setBrush(QColor(100,100,100,100));
+                path->moveBy(0, -2);
+                path->setScale(path->scale()-0.002);
+                path->setOpacity(path->opacity()-0.02);
+                if (path->opacity() < 0.02) {
+                    scene.removeItem(path);
+                    movingPaths.removeOne(path);
+                }
             }
         }
     } else if (mode==2) {
@@ -121,14 +130,18 @@ void ShapePackingCanvas::timerUpdate() {
     }
 }
 
-void ShapePackingCanvas::onlinePack2(QList<ShapePackingPathItem *> packedPaths, ShapePackingPathItem* curPath) {
+bool ShapePackingCanvas::onlinePack2(QList<ShapePackingPathItem *> packedPaths, ShapePackingPathItem* curPath) {
     //qDebug() << "Corners BEFORE: " << corners;
-
+    bool ok; //bool ok signals whether the path would fit in a particular location.
     for (auto icorner = corners.begin() ; icorner != corners.end() ; ++icorner) {
         QPointF &corner = *icorner;
         //qDebug() << "trying " << corner;
-        curPath->packedPos = corner;
-        bool ok = true;
+        curPath->packedPos = corner; //"tries on" the corner by temporarily setting the corner as its packed position.
+        ok = true;
+        if (!curPath->isInsideCanvas()) { //makes sure the rectangle fits inside the canvas box.
+            ok = false;
+            continue;
+        }
         for (ShapePackingPathItem* path : packedPaths) {
             //qDebug() << "trying path " << path->startTLC;
             if (curPath->intersects(path)) {
@@ -138,32 +151,30 @@ void ShapePackingCanvas::onlinePack2(QList<ShapePackingPathItem *> packedPaths, 
             }
         }
         if (ok) {
-            //qDebug() << "success at corner " << corner << "\n";
-            corners.erase(icorner);
+            corners.erase(icorner); //the successful corner is removed from the list of eligible corners.
+
+            //creates two new eligible corners at the top-right and bottom-left corners of the just-packed rectangle.
             QPointF corner1 = curPath->packedPos + QPointF(curPath->rect().width(),0);
             QPointF corner2 = curPath->packedPos + QPointF(0,curPath->rect().height());
-            corners.insert(corner1.manhattanLength(), corner1);
-            corners.insert(corner2.manhattanLength(), corner2);
+
+            // the corners are organized in a QMultiMap. I weighted the keys so that the shape of the growing mass of rectangles
+            // would approximate a square shape. If you try packing many small pixel-like rectangles, you'll see that the shape they
+            // make is in fact a rounded square shape.
+
+            corners.insert(hypot(corner1.x(), corner1.y()) - 0.2* corner1.manhattanLength(), corner1);
+            corners.insert(hypot(corner2.x(), corner2.y()) - 0.2* corner2.manhattanLength(), corner2);
             //qDebug() << "Corners AFTER: " << corners;
             break;
         }
     }
-    return;
-}
-
-QPointF ShapePackingCanvas::normalized(const QPointF point) {
-    if (!point.isNull()) {
-        float mag = hypotf(point.x(), point.y());
-        return point/mag;
+    if (!ok) {
+        paths.removeOne(curPath);
     }
-    else return QPointF(0,0);
+    return ok; //this "ok" value that gets returned dictates whether the rectangle is dead or alive.
 }
 
 void ShapePackingCanvas::addNewRect(int w, int h) {
-    //QPainterPath path;
-    //path.addRect(QRectF(pos,QSizeF(0,0)));
-    curPath = new ShapePackingPathItem();
-    //curPath->setPath(path);
+    curPath = new ShapePackingPathItem(this);
     curPath->setPen(QPen(Qt::yellow, 3.0));
     scene.addItem(curPath);
     paths.push_back(curPath);
@@ -174,16 +185,15 @@ void ShapePackingCanvas::addNewRect(int w, int h) {
     curPath->startTLC = mapFromScene(curPath->pos() + curPath->rect().topLeft());
     curPath->startPos = curPath->pos();
 
-    //qDebug() << "start TLC = " << curPath->startTLC;
-
     curPath->setBrush(QColor(0,0,255,26));
     curPath->setPen(QPen(Qt::lightGray, 3.0));
 
-    onlinePack2(packedPaths, curPath);
-    packedPaths.push_back(curPath);
+    if (onlinePack2(packedPaths, curPath)) {
+        packedPaths.push_back(curPath);
+        curPath->alive = true;
+    } else curPath->alive = false;
 
     movingPaths.push_back(curPath);
-
 }
 
 void ShapePackingCanvas::clear() {
@@ -194,106 +204,6 @@ void ShapePackingCanvas::clear() {
     packedPaths.clear();
     movingPaths.clear();
     corners.clear();
-    t=0;
     corners.insert(0, QPointF(0,0));
     return;
 }
-
-void ShapePackingCanvas::pack2D(QList<ShapePackingPathItem *> paths) {
-    class MyContent {
-     public:
-     std::string str;
-     MyContent() : str("default string") {}
-     MyContent(const std::string &str) : str(str) {}
-     };
-
-     //srandom(0x69);
-
-     // Create some 'content' to work on.
-     BinPack2D::ContentAccumulator<MyContent> inputContent;
-
-     for(ShapePackingPathItem* path : paths) {
-
-       //printf("hello");
-
-       int width  = path->shape().boundingRect().size().width();//getSizePointF(path).x();
-       int height = path->shape().boundingRect().size().height();//getSizePointF(path).y();
-
-       // whatever data you want to associate with this content
-       std::stringstream ss;
-       ss << "box " << width << " " << height;
-       MyContent mycontent( ss.str().c_str() );
-
-       // Add it
-       inputContent += BinPack2D::Content<MyContent>(mycontent, BinPack2D::Coord(), BinPack2D::Size(width, height), false );
-     }
-
-     // Sort the input content by size... usually packs better.
-     inputContent.Sort();
-
-     // Create some bins! ( 2 bins, 128x128 in this example )
-     BinPack2D::CanvasArray<MyContent> canvasArray =
-       BinPack2D::UniformCanvasArrayBuilder<MyContent>(this->width(),this->height(),1).Build();
-       qDebug() << this->width() << this->height();
-
-     // A place to store content that didnt fit into the canvas array.
-     BinPack2D::ContentAccumulator<MyContent> remainder;
-
-     // try to pack content into the bins.
-     bool success = canvasArray.Place( inputContent, remainder );
-
-     // A place to store packed content.
-     BinPack2D::ContentAccumulator<MyContent> outputContent;
-
-     // Read all placed content.
-     canvasArray.CollectContent( outputContent );
-
-     // parse output.
-     typedef BinPack2D::Content<MyContent>::Vector::iterator binpack2d_iterator;
-     printf("PLACED:\n");
-     int i = 0;
-     for( binpack2d_iterator itor = outputContent.Get().begin(); itor != outputContent.Get().end(); itor++ ) {
-
-
-       BinPack2D::Content<MyContent> &content = *itor;
-
-       // retreive your data.
-       MyContent &myContent = content.content;
-
-//       printf("\t%9s of size %3dx%3d at position %3d,%3d,%2d rotated=%s\n",
-//          myContent.str.c_str(),
-//          content.size.w,
-//          content.size.h,
-//          content.coord.x,
-//          content.coord.y,
-//          content.coord.z,
-//          (content.rotated ? "yes":" no"));
-
-       qDebug() << myContent.str.c_str() << " of size " << content.size.w << "x" << content.size.h << " at position " << content.coord.x << ", " << content.coord.y;
-       qDebug() << paths;
-
-
-       paths[i]->packedPos = QPointF(content.coord.x, content.coord.y);
-       qDebug() << paths[i]->packedPos;
-       qDebug() << i;
-       ++i;
-
-
-     printf("NOT PLACED:\n");
-     for( binpack2d_iterator itor = remainder.Get().begin(); itor != remainder.Get().end(); itor++ ) {
-
-       const BinPack2D::Content<MyContent> &content = *itor;
-
-       const MyContent &myContent = content.content;
-
-       printf("\t%9s of size %3dx%3d\n",
-          myContent.str.c_str(),
-          content.size.w,
-          content.size.h);
-     }
-
-     return;
-   }
-}
-
-

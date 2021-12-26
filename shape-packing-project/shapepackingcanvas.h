@@ -19,15 +19,18 @@ public:
     QGraphicsScene scene;
     QTimer timer;
 
-    float pathAnimSpeed;
     int mode;
     int framerate;
+    int animLength; //number of frames to move rect to position
+
+    int canvasWidth = 1000;
+    int canvasHeight = 800;
 
     QList<ShapePackingPathItem*> paths;
     QList<ShapePackingPathItem*> movingPaths;
     QList<ShapePackingPathItem*> packedPaths;
-    QMultiMap<int, QPointF> corners;
-//    QList<QPointF> packedPositions;
+
+    QMultiMap<int, QPointF> corners; //viable corners in which to try to pack something
     ShapePackingPathItem *curPath;
 
     QList<QGraphicsSimpleTextItem*> coordsTexts;
@@ -37,17 +40,12 @@ public:
     void clear();
 
     void pack2D(QList<ShapePackingPathItem*> paths);
-    void onlinePack(QList<ShapePackingPathItem*> packedPaths, ShapePackingPathItem* curPath);
-    void onlinePack2(QList<ShapePackingPathItem*> packedPaths, ShapePackingPathItem* curPath);
-
-
+    bool onlinePack2(QList<ShapePackingPathItem*> packedPaths, ShapePackingPathItem* curPath);
 
 protected:
     void mouseMoveEvent(QMouseEvent *evt) override;
     void mousePressEvent(QMouseEvent *evt) override;
     void mouseReleaseEvent(QMouseEvent *evt) override;
-
-
 
 private:
     QPointF normalized(const QPointF point);
@@ -55,7 +53,6 @@ private:
 
 public slots:
     void timerUpdate();
-
 };
 
 #endif // SHAPEPACKINGCANVAS_H
